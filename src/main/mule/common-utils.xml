@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<sub-flow name="update-status-sf-subFlow" doc:id="19a9bda5-dcac-4692-bf6c-a56a0cc061b9" >
+		<json-logger:logger doc:name="Start - Update Status In Salesforce" doc:id="206e0b62-75a9-44ea-b4e6-1e9ce0c08cf9" config-ref="JSON_Logger_Config" message="Start - Update Status In Salesforce" tracePoint="BEFORE_REQUEST" priority="DEBUG" category="com.impelai.api"/>
+		<salesforce:upsert objectType="Sage_Contract__c" externalIdFieldName="Intacct_Contract_ID__c" doc:name="Upsert Contract Creation Status" doc:id="6afe345e-27f2-4287-b3fa-f916443d3954" config-ref="Salesforce_Config" />
+		<json-logger:logger doc:name="End - Update Status In Salesforce" doc:id="b54c7e69-1f3f-410e-8cd7-dce9ca0ecb42" config-ref="JSON_Logger_Config" message="End - Update Status In Salesforce" tracePoint="AFTER_REQUEST" priority="DEBUG" category="com.impelai.api"/>
+	</sub-flow>
+	<sub-flow name="generate-sessionID-subFlow" doc:id="f9320502-4af7-43e1-9689-b4b29959279a" >
+		<os:retrieve doc:name="Retrieve SessionID" doc:id="db48421c-e51f-4a6e-bee1-f4f28e9f7c10" key="sessionId" objectStore="Object_store" target="sessionId">
+			<os:default-value ><![CDATA[#[""]]]></os:default-value>
+		</os:retrieve>
+		<choice doc:name="Choice" doc:id="30640b5b-f77e-44c8-8f7d-02a7d76ee1ca" >
+			<when expression="#[isEmpty(vars.sessionId)]">
+				<http:request method="POST" doc:name="Get SessionID" doc:id="3f37df40-c505-46a1-9dca-412a82cc540d" config-ref="HTTP_Request_Sage_configuration" path="${sage.api.path}" outputMimeType="application/xml">
+					<http:body ><![CDATA[#[%dw 2.0
+output application/xml
+---
+{
+  request: {
+    control: {
+      senderid: Mule::p('sage.login.senderId'),
+      password: Mule::p('sage.login.senderPass'),
+      controlid: now(),
+      uniqueid: false,
+      dtdversion: "3.0",
+      includewhitespace: false
+    },
+    operation: {
+      authentication: {
+        login: {
+          userid: Mule::p('sage.login.userId'),
+          companyid:  Mule::p('sage.login.companyId'),
+          password: Mule::p('sage.login.userPass')
+        }
+      },
+      content: {
+        function @(controlid: uuid()): {
+          getAPISession: {}
+        }
+      }
+    }
+  }
+}]]]></http:body>
+				</http:request>
+				<ee:transform doc:name="Set SessionID" doc:id="417ce681-1037-4152-bcb7-8cb8f6bbd64b">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="sessionId" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.response.operation.result.data.api.sessionid]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<os:store doc:name="Store SessionID" doc:id="bd1a99d8-306d-482d-9131-28d939d5107c" key="sessionId" objectStore="Object_store">
+					<os:value ><![CDATA[#[vars.sessionId]]]></os:value>
+				</os:store>
+			</when>
+		</choice>
+	</sub-flow>
+	<sub-flow name="create-contracts-sage-subFlow" doc:id="ec741395-8cf1-4cb6-9e58-faf7210bd6e4" >
+		<json-logger:logger doc:name="Start - Req Contract Creation" doc:id="9df238cc-4e6f-4224-863c-d93286e61f4c" config-ref="JSON_Logger_Config" message="Start - Req Contract Creation" tracePoint="BEFORE_REQUEST" priority="DEBUG" category="com.impelai.api"/>
+		<http:request method="POST" doc:name="Request To Create Contract in Sage" doc:id="de4dd147-6b6a-43bf-8ce8-44a12045fea8" config-ref="HTTP_Request_Sage_configuration" path="${sage.api.path}" />
+		<json-logger:logger doc:name="End - Req Contract Creation" doc:id="eba44de5-a67b-4947-be3b-b50a22c8f1a5" config-ref="JSON_Logger_Config" message="End - Req Contract Creation" tracePoint="AFTER_REQUEST" priority="DEBUG" category="com.impelai.api"/>
+	</sub-flow>
+</mule>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<json-logger:config name="JSON_Logger_Config" doc:name="JSON Logger Config" doc:id="149175f1-eb48-4337-8438-25e52182acba" environment="${mule.env}" applicationName="${api.name}" applicationVersion="${api.version}" logLocationInfo="#['${jsonLogger.logLocationInfo}']" disabledFields="${jsonLogger.disabledFields}" contentFieldsDataMasking="${jsonLogger.maskedFields}" doc:description="Loading Json Logger Configuration&#xA;" />
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="fb813594-49f2-412f-b05c-f557f7b3daaa" maxEntries="${objstore.maxentries}" entryTtl="${objstore.ttl}" entryTtlUnit="MINUTES" expirationInterval="${objstore.expirationinterval}" />
+	<http:request-config name="HTTP_Request_Sage_configuration" doc:name="HTTP Request configuration" doc:id="10c01dd6-1e97-4c68-a4eb-350d69ad1f1f" basePath="${sage.api.basePath}">
+		<http:request-connection protocol="HTTPS" host="${sage.api.host}" port="443" >
+			<tls:context >
+				<tls:trust-store insecure="true" />
+			</tls:context>
+		</http:request-connection>
+	</http:request-config>
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="c4a918ba-4572-4eb0-8e8c-6251530766d2" >
+		<salesforce:oauth-client-credentials-connection >
+			<salesforce:oauth-client-credentials clientId="${salesforce.clientId}" clientSecret="${salesforce.clientSecret}" tokenUrl="${salesforce.tokenApi}" />
+		</salesforce:oauth-client-credentials-connection>
+	</salesforce:sfdc-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="51f2ed2f-1d53-462a-9f23-765f1ee4dbc6" file="properties\config-${mule.env}.yaml" doc:description="Load Environment Properties"/>
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="c3ac9245-d465-440a-8cec-c8559112c2fe" file="properties\secure\secure-${mule.env}.yaml" key="${mule.key}"/>
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="51728d05-6341-4c7c-b7af-32bab126a7d3" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="303d1dcd-0862-4706-a502-e5d8ca40ae19" file="properties\config-common.yaml" doc:description="Load Common properties"/>
+</mule>

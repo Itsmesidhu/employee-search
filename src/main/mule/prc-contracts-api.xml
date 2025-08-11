@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+	<flow name="prc-contracts-apiFlow" doc:id="3c6e99eb-9be8-48af-bb6f-2720e43c784e" >
+		<http:listener doc:name="Listener" doc:id="3564575a-b225-4d9a-a753-b15c59190b58" config-ref="HTTP_Listener_config" path="/contracts"/>
+		<json-logger:logger doc:name="Start - Receive Contract Creation Platform Event" doc:id="66c43bf3-2ae8-4ca4-8a0c-8ab86a837ac0" config-ref="JSON_Logger_Config" message='#["Start Flow - Received Contract Platform Event For : " ++ (payload.data.payload.Contract_ID__c default "")]' category="com.impelai.api"/>
+		<set-variable value="#[payload.data.'payload']" doc:name="Set Input Payload" doc:id="6027e2ef-eb33-47a9-965d-247dbf0fbc69" variableName="inputPayload"/>
+		<flow-ref doc:name="Call To Get SessionID" doc:id="e311df76-71fb-4b37-863c-fd42e3f77869" name="generate-sessionID-subFlow"/>
+		<ee:transform doc:name="Transform Contract Creation Payload" doc:id="63b04fbc-64ed-489b-9c26-4421b6b9a579" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+var sender_id = Mule::p('sage.login.senderId')
+var sender_password = Mule::p('sage.login.senderPass')
+var timestamp = uuid()
+var user_id = Mule::p('sage.login.userId')
+var company_id = Mule::p('sage.login.companyId')
+var user_password = Mule::p('sage.login.userPass')
+var guid = uuid()
+
+output application/xml  
+---
+
+  request: {
+    control: {
+      senderid: sender_id,
+      password: sender_password,
+      controlid: timestamp,
+      uniqueid: false,
+      dtdversion: "3.0",
+      includewhitespace: false
+    },
+    operation: {
+      authentication: {
+        sessionid: vars.sessionId
+      },
+      content: {
+        function @("controlid": guid): {
+          create: {
+            CONTRACT: {
+              CONTRACTID: vars.inputPayload.Contract_ID__c,
+              CUSTOMERID: vars.inputPayload.Customer__c,
+              NAME: vars.inputPayload.Name__c,
+              STATE: vars.inputPayload.Status__c,
+              //CONTRACTTYPE: vars.inputPayload.Contract_Type__c,
+              BILLTOCONTACTNAME: "B_" ++ vars.inputPayload.Customer__c,
+              DESCRIPTION: "",
+              SHIPTOCONTACTNAME: "S_" ++ vars.inputPayload.Customer__c,
+              BEGINDATE: vars.inputPayload.Start_Date__c,
+              ENDDATE: vars.inputPayload.End_Date__c,
+              BILLINGFREQUENCY: "Monthly",
+              TERMNAME: vars.inputPayload.Payment_Terms__c,
+              APPLICATION: "Contracts",
+              ADDITIONALCONTACTNAME: null,
+              EVERGREENMACRO: if (upper(vars.inputPayload.Renewal_Term_Type__c) == "EVERGREEN") vars.inputPayload.Renewal_Template__c else "",
+              PRCLIST: null,
+              MEAPRCLIST: null,
+              ADVBILLBY: null,
+              "ADDITIONALCONTACTNAME": null,
+              "ADVBILLBYTYPE": null,
+              "RENEWALADVBILLBY": null,
+              "RENEWALADVBILLBYTYPE": null,
+              "LOCATIONID": vars.inputPayload.Entity__c,
+              "DEPARTMENTID": null,
+              "PROJECTID": null,
+              "VENDORID": null,
+              "EMPLOYEEID": null,
+              "CLASSID": null,
+              "CURRENCY": vars.inputPayload.CurrencyIsoCode,
+              "TERMTYPE" : vars.inputPayload.Contract_Type__c,
+              "RENEWAL": vars.inputPayload.Renew__c,
+              "RENEWALMACRO": if (upper(vars.inputPayload.Renewal_Term_Type__c) == "TERMED") vars.inputPayload.Renewal_Template__c else "",
+              "RENEWTERMLENGTH": vars.inputPayload.Renewal_Term_Length_in_Months__c,
+              "RENEWTERMPERIOD": "Months",
+              "BASECURR": vars.inputPayload.CurrencyIsoCode,
+              "MEGAENTITYID": vars.inputPayload.Entity__c,
+              EXCHRATETYPE: 
+                if (vars.inputPayload.Entity__c == "E-110")
+                  "AUD Bank Rate"
+                else
+                  "Intacct Daily Rate"
+            }
+          }
+        }
+      }
+    }
+  }
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Call Create Contracts Flow" doc:id="6f4ff9b6-35b2-47fa-9a89-1c364faeb5ad" name="create-contracts-sage-subFlow"/>
+		<ee:transform doc:name="Update Status Request" doc:id="5980be2b-78a1-4bf3-9152-766efed07f3c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+var errorDetails = payload.response.operation.result.errormessage.error.description2
+---
+ [{
+"Intacct_Contract_ID__c" : vars.inputPayload.Contract_ID__c,
+"Synced_with_Intacct_Date__c" : now() as DateTime {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"},
+"Intacct_Sync_Status__c" : if(!isEmpty(errorDetails)) "Error" else "OK",
+"Intacct_Sync_Errors__c" : if(!isEmpty(errorDetails)) errorDetails else ""
+}]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Call SF Update Status" doc:id="60241085-bd5e-418f-8f33-a1cf0c901c70" name="update-status-sf-subFlow" />
+		<json-logger:logger doc:name="End - Contract Creation" doc:id="c3a4438c-15ce-45cb-b48f-8a73be5267ec" config-ref="JSON_Logger_Config" message='#["End Flow - Contract Creation Completed For : " ++ (vars.inputPayload.Contract_ID__c default "")]' category="com.impelai.api"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="276c8954-4963-4656-94d8-2468cb0b7136" >
+				<json-logger:logger doc:name="Error Ocurred" doc:id="59a1e40c-b1bd-4ac1-8baf-4c0c1c5ddd58" config-ref="JSON_Logger_Config" message='#["Error Occurred : " ++ (error.description default "")]' tracePoint="EXCEPTION" category="com.impelai.api" priority="ERROR"/>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>
